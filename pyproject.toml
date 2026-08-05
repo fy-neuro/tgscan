@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tgscan"
+version = "0.1.0"
+description = "Transgene hitchhiker gene screener for BAC-mediated RNA-seq count artifacts"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Fanyi", email = "fy14651858518@163.com"},
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "openpyxl>=3.1",
+    "python-calamine>=0.1",
+    "typer>=0.9",
+]
+
+[project.optional-dependencies]
+h5ad = ["scanpy>=1.10"]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[project.scripts]
+tgscan = "tgscan.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/fy-neuro/tgscan"
+Documentation = "https://github.com/fy-neuro/tgscan#readme"
+Issues = "https://github.com/fy-neuro/tgscan/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tgscan = ["data/*.tsv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
