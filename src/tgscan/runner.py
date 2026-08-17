@@ -145,8 +145,27 @@ def verify_batch(jobs_tsv: str, gtf_path: str, output_tsv: str,
     by_gse: Dict[str, List[dict]] = {}
     for _, row in jobs.iterrows():
         by_gse.setdefault(str(row['gse']), []).append(row.to_dict())
-
     results = []
+
+    # construct gate: empirically excluded alleles (promoter cassettes etc.)
+    # are flagged instead of wasting a matrix parse (PI SOP: capture ability is
+    # a hard gate; see data/excluded_constructs.tsv)
+    from . import catalog as _cat
+    gated = 0
+    for gse in list(by_gse.keys()):
+        allele = by_gse[gse][0].get('allele')
+        if allele:
+            reason = _cat.construct_gate(str(allele))
+            if reason:
+                for job in by_gse[gse]:
+                    r = _error_result(job, gse, f'excluded_construct: {reason[:80]}')
+                    r['status'] = 'excluded_construct'
+                    results.append(r)
+                gated += 1
+                del by_gse[gse]
+    if gated:
+        print(f"Construct gate: skipped {gated} GSEs on excluded alleles", flush=True)
+
     n_total = len(by_gse)
     for i, (gse, gse_jobs) in enumerate(by_gse.items(), 1):
         if gse in existing_gse:

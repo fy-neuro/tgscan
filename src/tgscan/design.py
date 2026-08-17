@@ -29,4 +29,15 @@ def detect_design_issues(df: pd.DataFrame, sample_cols) -> List[str]:
     # too few samples for r
     if len(sample_cols) < 3:
         issues.append(f'too_few_samples({len(sample_cols)})')
+    # z-score normalized matrix: raw counts are never negative; >30% negative
+    # values across the first sample columns implies per-row z-scaling (scRNA
+    # exports) — Pearson on such matrices is dominated by normalization
+    if sample_cols:
+        try:
+            probe = df[sample_cols[:3]].apply(pd.to_numeric, errors='coerce')
+            neg_frac = float((probe < 0).sum().sum() / probe.size)
+            if neg_frac > 0.30:
+                issues.append(f'zscore_normalized({neg_frac:.0%}_negative)')
+        except Exception:
+            pass
     return issues
