@@ -10,89 +10,91 @@
 When a BAC transgene construct is built, it sometimes captures neighboring gene exons from the genome. After multi-copy integration and transcription, these "hitchhiker" sequences are miscounted as endogenous gene expression, causing RNA-seq count artifacts.
 
 `tgscan` provides:
-- **8 GEO matrix format parsers** (xlsx, csv.gz, tsv.gz, txt.gz, xls.gz, RAW.tar simple/Kallisto, h5ad)
-- **Two-stage validation**: Pearson correlation + percentile, then cis-enrichment hypergeometric test
-- **CLI** for single/batch verification + catalog search
-- **Catalog** of 14 confirmed + 4 candidate hitchhikers (as of 2026-08)
+- **9 GEO matrix format parsers** (xlsx, csv.gz, tsv.gz, txt.gz, xls.gz, RAW.tar simple/Kallisto/Cufflinks, h5ad pseudo-bulk)
+- **Two-stage validation**: Stage 1 Pearson + genome-wide percentile (with background-dirty guard), Stage 2 cis-1Mb hypergeometric enrichment (the confirmation gold standard, p<1e-3)
+- **Design guards**: miRNA-only / over-filtered / z-score matrices flagged automatically
+- **Construct gate**: empirically excluded alleles (promoter cassettes that cannot capture neighbors, e.g. Vil1-cre 12.4kb) are auto-skipped in batch runs
+- **Bundled catalog**: 21 confirmed + 6 candidate hitchhikers (2026-08-17) with evidence levels
+- **CLI + Python API** for single/batch verification
 
 ## Installation
 
 ```bash
-pip install -e .
-# Optional: h5ad support
-pip install -e ".[h5ad]"
-# Optional: development
-pip install -e ".[dev]"
+pip install .                # from a checkout
+pip install -e ".[dev]"      # development install (pytest)
+pip install ".[h5ad]"        # + scanpy for h5ad pseudo-bulk
 ```
+
+> **Note (exFAT/NAS users)**: building directly from a source tree on exFAT can
+> stall (setuptools writes a `build/` dir; slow + case-insensitive FS). Copy the
+> tree to a local ext4/tmpfs dir first, or install from the git URL — pip then
+> builds in an ext4 temp dir automatically.
 
 ## Quick start
 
-### Command line
+### 0. Selftest (do this first)
 
 ```bash
-# Verify a single candidate
-tgscan verify \
-  --matrix GSE130842.xlsx \
-  --driver Nfil3 \
-  --candidate Auh \
-  --gtf mm39.gtf
+tgscan selftest
+```
 
-# Batch validate
-tgscan batch --jobs candidates.tsv --geo-dir ./geo_data --output results.tsv
+Runs the full pipeline (parser → stage 1 → cis) on a bundled synthetic
+locus — a co-amplified hitchhiker and a negative control. No downloads needed.
+All checks must print `PASS`.
 
-# Run cis-enrichment on stage1 results
-tgscan cis --input stage1.tsv --gtf mm39.gtf
+### 1. Verify one candidate
 
-# Search known hitchhikers
-tgscan catalog list
-tgscan catalog search --driver Nfil3
+```bash
+tgscan verify --matrix GSE130842.xlsx --driver Nfil3 --candidate Auh --gtf mm39.gtf
+```
+
+Output: Stage-1 r / percentile / background mean, Stage-2 cis p (Top-10/50/100)
+and a verdict: **CONFIRMED** (cis p<1e-3) / **CANDIDATE** (1e-3..1e-2) / WEAK.
+
+### 2. Batch verify
+
+```bash
+tgscan batch --jobs jobs.tsv --gtf mm39.gtf --geo-dir /path/to/geo_files -o results.tsv
+```
+
+`jobs.tsv` columns: `gse, driver, candidate, dist_kb, allele` (optional `matrix`
+for explicit paths). Resumable; alleles on the exclusion list are skipped with
+status `excluded_construct`.
+
+### 3. Catalog
+
+```bash
+tgscan catalog list --status confirmed
+tgscan catalog search --driver Aldh1l1
+tgscan catalog stats
 ```
 
 ### Python API
 
 ```python
 from tgscan import verify
-
-result = verify(
-    matrix='GSE130842.xlsx',
-    driver='Nfil3',
-    candidate='Auh',
-    gtf='mm39.gtf'
-)
-print(result.verdict)    # "CONFIRMED"
-print(result.r)          # 0.965
-print(result.cis_p)      # 6.8e-06
+r = verify("GSE130842.xlsx", "Nfil3", "Auh", "mm39.gtf")
+print(r.verdict, r.r, r.cis_p)   # CONFIRMED 0.965 6.8e-06
 ```
 
-## Status definitions
+## How to read the numbers
 
-| Status | Meaning |
-|--------|---------|
-| ✅ Confirmed | Percentile >95% + cis-enrichment p < 1e-3 |
-| ⚠️ Candidate | Percentile >95% + cis-enrichment p in [1e-3, 1e-2] |
-| Stage 1 passed | Percentile >95% but cis not tested |
-| Negative | Verified, no signal in clean background |
-| Insufficient | Data format/design/quality prevents assessment |
-| Predicted only | Candidate predicted from BAC span but not yet validated |
+- **Percentile is dataset-relative**: it is the rank of the driver–candidate
+  Pearson r within *that* matrix's genome-wide r distribution. In a clean
+  background (mean r ≈ 0) even a modest r can rank >99%. Confirmation therefore
+  always requires the independent cis test — never percentile alone.
+- **BACKGROUND_TOO_HIGH** (mean r > 0.3): the design (cell-type gradient,
+  infection response, sort-marker dominance) swamps the transgene-load signal —
+  the dataset is unusable, not the candidate negative.
+- **Promoter-cassette trap**: a 12-kb promoter construct cannot capture
+  neighbors; cell-type gradients can still produce driver–neighbor correlations
+  that pass both stages. The construct gate + `excluded_constructs.tsv`
+  guard against this (see Task25 audit, 2026-08-17).
 
-See [Methods](https://github.com/fy-neuro/tgscan/blob/main/docs/methods.md) for cis-enrichment test details.
+## Data & provenance
 
-## Supported formats
-
-| Format | Extension | Notes |
-|--------|-----------|-------|
-| Excel | `.xlsx` | Skips DE-result sheets (LRT/WALD) |
-| Excel gzipped | `.xlsx.gz` | |
-| Legacy Excel | `.xls.gz` | Via calamine (xlrd 2.0 dropped support) |
-| CSV / TSV / TXT | `.csv`, `.tsv`, `.txt` (+`.gz`) | Auto-separator detection |
-| 10x RAW.tar | `_RAW.tar` | Simple per-sample + Kallisto transcript-level |
-| h5ad | `.h5ad` (+`.gz`) | scanpy pseudo-bulk by cell type (optional dep) |
-
-## Catalog
-
-The catalog of known hitchhikers is bundled with the package. See:
-- [Online catalog](http://47.97.243.155/)
-- `data/known_hitchhikers.tsv` in this repo
+Catalog SSOT: `src/tgscan/data/known_hitchhikers.tsv` (26 rows; Ensembl IDs
+verified against mm39). Live browser: [tgscan catalog](http://47.97.243.155/).
 
 ## License
 
