@@ -158,5 +158,15 @@ def version():
     typer.echo(__version__)
 
 
+@app.command(name='selftest')
+def selftest_cmd():
+    """End-to-end installation check with bundled synthetic data (no downloads)."""
+    from .selftest import run_selftest
+    typer.echo("Running tgscan selftest (synthetic GTF + matrix, ~5s)...")
+    ok = run_selftest(verbose=True)
+    if not ok:
+        raise typer.Exit(1)
+
+
 if __name__ == '__main__':
     app()
