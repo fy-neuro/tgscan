@@ -11,7 +11,7 @@ from .cis import cis_test
 from .runner import verify, verify_batch
 from . import catalog
 
-__version__ = '0.1.0'
+__version__ = "0.2.0"
 
 __all__ = [
     'verify', 'verify_batch', 'parse_matrix', 'numeric_sample_cols', 'detect_format',

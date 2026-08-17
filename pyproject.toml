@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tgscan"
-version = "0.1.0"
+version = "0.2.0"
 description = "Transgene hitchhiker gene screener for BAC-mediated RNA-seq count artifacts"
 readme = "README.md"
 license = {text = "MIT"}

@@ -1,0 +1,15 @@
+# Empirical blacklist / warnings from PI decisions (DECISIONS.md + WORK_HABITS.md)
+# allele<TAB>action<TAB>reason
+# action: EXCLUDE = 实测否决, 不进队列; WARN = 投入前需核实插入片段大小
+Tg(Adipoq-cre)1Evdr	EXCLUDE	PI 07-25: JAX 010803 实为 ~5kb 启动子 cassette; GSE298110 KO vs Flox 均噪声级, 够不到 12.2kb 邻居
+Tg(Itgax-cre)1-1Reiz	WARN	PI 07-25: "Itgax/Adipoq 都实测够不到"; MGI note 的 BAC 标签不可信, 投入验证前先核 JAX 插入片段大小
+Tg(Mpz*)CDah	WARN	见 07-27 Mpz/D61N 教训: 该座品系本质需查原文 Methods (KI 混入风险)
+Tg(Vil1-cre)997Gum	EXCLUDE	08-17细查: 12.4kb Vil1启动子cassette(16拷贝,chr17) — Ctdsp1/Usp37高相关=内源肠细胞邻域共表达(Stom型陷阱), 构建体无法捕获
+Tg(Tek-cre)12Flv	EXCLUDE	08-17细查: Tek启动子/enhancer cassette — Lrrc19/Eqtn相关=内源内皮共表达
+Tg(Myh11-cre,-EGFP)2Mik	EXCLUDE	08-17细查: 16kb Myh11启动子+IRES-EGFP cassette — Abcc1相关=内源平滑肌共表达(注意F31Gko才是BAC系)
+Tg(Ppp1r1b-cre)1Meeh	EXCLUDE	08-17细查: Ppp1r1b基因座基因组片段(3克隆)单拷贝(Southern验证) — Grb7(+89kb)捕获不可能且信号弱=内源MSA共表达
+Tg(Crx-cre)1Tfur	EXCLUDE	08-17审计: 12kb Crx启动子cassette误标genomic_fragment
+Tg(Dmp1-cre)1Jqfe	EXCLUDE	08-17审计: 14kb Dmp1启动子cassette误标genomic_fragment
+Tg(Trpm5-EGFP)#Sdmk	EXCLUDE	08-17审计: 11kb 5'侧翼+cassette误标genomic_fragment
+Tg(Pax6-cre,GFP)1Pgr	EXCLUDE	08-17二审: 6.5kb Pax6启动子cassette — Elp4(+2kb邻接)高相关=内源共表达(Nr5a1os型), 构建体无法捕获
+Tg(Dhh-cre)1Mejr	EXCLUDE	08-17二审: 19kb Dhh小基因组克隆 — Kmt2d(-20~-60kb)/Tuba1b(+33kb)均在构建体外, cis双数据集WEAK; 相关=Sertoli/颗粒细胞内源邻域共表达
