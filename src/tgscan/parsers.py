@@ -81,9 +81,29 @@ def detect_format(path: str) -> str:
 
 
 # ---------- parsers ----------
+def _merge_dup_value_cols(df: pd.DataFrame) -> pd.DataFrame:
+    """Cufflinks/RSEM files repeat the value-column header (FPKM FPKM FPKM ...),
+    which pandas dedups to FPKM, FPKM.1, FPKM.2. Collapse such duplicate value
+    columns to their mean (row-wise max would overestimate; mean matches the
+    GSE71463 salvage script). Conservative: only for known value-column names."""
+    bases = ('FPKM', 'TPM', 'counts', 'Count', 'count', 'est_counts')
+    for base in bases:
+        dup_cols = [c for c in df.columns
+                    if c == base or (isinstance(c, str) and re.fullmatch(rf'{re.escape(base)}\.\d+', c))]
+        if len(dup_cols) > 1:
+            merged = df[dup_cols].apply(pd.to_numeric, errors='coerce').mean(axis=1)
+            df = df.drop(columns=[c for c in dup_cols if c != base])
+            if base in df.columns:
+                df[base] = merged
+            else:
+                df[base] = merged
+    return df
+
+
 def _parse_simple(path: str) -> pd.DataFrame:
     """csv/tsv/txt.gz with auto-detect separator + composite ID normalization."""
     df = pd.read_csv(path, sep=None, engine='python', comment='#', on_bad_lines='skip')
+    df = _merge_dup_value_cols(df)
     if len(df.columns) > 0:
         col = df.columns[0]
         s = df[col].astype(str)
@@ -208,6 +228,11 @@ def _parse_raw_tar(path: str, extract_dir: Optional[str] = None) -> pd.DataFrame
     is_kallisto = 'TPM' in header and 'gene_id' in header
     if is_kallisto:
         gene_col, val_col = header.index('gene_id'), header.index('TPM')
+    elif 'tracking_id' in header and 'FPKM' in header:
+        # Cufflinks per-sample tracking file (GSE71463 style): gene_short_name is
+        # the MGI symbol column, FPKM the (first) value column
+        gene_col = header.index('gene_short_name') if 'gene_short_name' in header else header.index('tracking_id')
+        val_col = header.index('FPKM')
     else:
         gene_col, val_col = 0, 1
     samples, gene_sets = [], []
