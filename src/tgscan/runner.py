@@ -197,7 +197,9 @@ def verify_batch(jobs_tsv: str, gtf_path: str, output_tsv: str,
                     continue
                 try:
                     an = analyze(df, drv_row, cand_row, sample_cols)
+                    print(f"    {cand}: r={an.r:.3f} pct={an.percentile:.1f}% mean_r={an.mean_r:.3f} [{an.status}]", flush=True)
                 except Exception as e:
+                    print(f"    {cand}: ERROR {e}", flush=True)
                     results.append(_error_result(job, gse, f'analyze: {e}'))
                     continue
                 results.append(_result_dict(job, gse, fmt, len(sample_cols),
