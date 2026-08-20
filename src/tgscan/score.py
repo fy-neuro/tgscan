@@ -1,15 +1,16 @@
 """score.py — v0.3 provisional probability scorer (transparent logistic).
 
 设计声明（防"自创框架"）: 本模块是工程工具, 不是新判定教条——
-权重系数全部公开, 校准于项目裁决集(22+6 positives vs store negatives),
+权重系数全部公开, 校准于项目裁决集(SSOT vs store negatives),
 LOO-CV 报告, PI 定调前仅作排序参考。输出含组件分解, 逐项可审计。
 
-特征(全部来自 card, 无黑箱):
-  x1 = pooled_r(usable; 无则单源 r; 均无则 0)
+v2 特征(BAYESIAN_DESIGN.md 设计 B, 证据通道化; 全部来自 card, 无黑箱):
+  x1 = P(θ>0.5)  设计 A 后验——真相关>0.5 的概率(替代裸 pooled_r;
+       小 n 数据集自动贬值; 无可用行时退回最强单数据集后验)
   x2 = min(-log10(cis_combined), 8)/8
   x3 = min(n_usable, 3)/3
   x4 = in_bac(1/0/0.5-unknown)
-  x5 = sign_flip(1/0)  [负向]
+  x5 = sign_consistency P(多数数据集同向)[设计 D; 无观测→0.5 中性]  [正向]
   x6 = min(I2,100)/100 [负向]
 """
 from __future__ import annotations
@@ -19,23 +20,33 @@ import math
 from typing import Optional
 
 from . import card as card_mod
+from . import bayes as bayes_mod
 
-FEATS = ["pooled_r", "cis_strength", "n_usable_n", "in_bac", "sign_flip", "i2_n"]
+FEATS = ["P_theta", "cis_strength", "n_usable_n", "in_bac", "sign_consistency", "i2_n"]
 
 
 def features_from_card(c: dict) -> Optional[list]:
     if c["pooled_r"] is None and not c["datasets"]:
         return None
-    r = c["pooled_r"]
-    if r is None:  # 无可用合并时取任一有效 r 的最大绝对值方向保守值
-        vals = [d["r"] for d in c["datasets"] if d["r"] is not None]
-        r = max(vals) if vals else 0.0
+    # x1: 设计 A 后验 P(θ>0.5)
+    p_theta = c.get("P_theta")
+    if p_theta is None:
+        vals = [(d["r"], d["n"]) for d in c["datasets"]
+                if d["r"] is not None and d["n"]]
+        if vals:
+            best = max(vals, key=lambda t: abs(t[0]))
+            n_eff = max(4, best[1])
+            p_theta = bayes_mod.posterior_theta([best[0]], [n_eff])["P_theta"]
+        else:
+            p_theta = 0.0
     cis = c["cis_combined_p"]
     cis_strength = min(-math.log10(max(cis, 1e-8)), 8) / 8 if cis else 0.0
     st = c.get("structure") or {}
     in_bac = 0.5 if st.get("in_bac_pct") is None else (1.0 if st["in_bac_pct"] > 0 else 0.0)
-    return [r, cis_strength, min(c["n_usable"], 3) / 3, in_bac,
-            1.0 if c["sign_flip"] else 0.0,
+    sign_p = c.get("sign_consistency_p")
+    sign_x = 0.5 if sign_p is None else sign_p
+    return [p_theta, cis_strength, min(c["n_usable"], 3) / 3, in_bac,
+            sign_x,
             min(c["I2_pct"] or 0, 100) / 100 if c["I2_pct"] is not None else 0.0]
 
 
@@ -112,6 +123,36 @@ def loo_report(X, y):
         m = fit_logistic([X[k] for k in tr], [y[k] for k in tr])
         out.append((y[i], apply_model(m, X[i])))
     return auc(out)
+
+
+def loo_predictions(X, y):
+    """LOO 的 (y_true, p_pred) 序列——校准曲线的输入。"""
+    out = []
+    for i in range(len(X)):
+        tr = [k for k in range(len(X)) if k != i]
+        m = fit_logistic([X[k] for k in tr], [y[k] for k in tr])
+        out.append((y[i], apply_model(m, X[i])))
+    return out
+
+
+def calibration_table(preds, n_bins: int = 5):
+    """可靠性表：[(bin_lo, bin_hi, n, mean_pred, observed_frac), ...]。
+
+    诚实口径：正例仅 ~29 个，bin 内样本小，observed_frac 噪声大——
+    论文中只作可靠性图参考，不作判定依据。
+    """
+    edges = [i / n_bins for i in range(n_bins + 1)]
+    tab = []
+    for i in range(n_bins):
+        grp = [(y, p) for y, p in preds if edges[i] <= p < edges[i + 1] or
+               (i == n_bins - 1 and p == 1.0)]
+        if not grp:
+            tab.append((edges[i], edges[i + 1], 0, None, None))
+            continue
+        ys = [g[0] for g in grp]
+        tab.append((edges[i], edges[i + 1], len(grp),
+                    sum(p for _, p in grp) / len(grp), sum(ys) / len(ys)))
+    return tab
 
 
 def score_pair(driver, gene, store_rows, ssot_row, model):

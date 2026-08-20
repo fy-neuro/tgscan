@@ -12,6 +12,7 @@ import math
 from typing import Optional
 
 from .design import design_issue_is_blocking
+from . import bayes as bayes_mod
 
 
 # ---------------------------------------------------------------- math (ported from Task25/p2_meta_analysis.py, assertion-tested there)
@@ -143,6 +144,20 @@ def make_card(driver: str, gene: str, store_rows, ssot_row: Optional[dict] = Non
     spread = (max(usable_rs) - min(usable_rs)) if len(usable_rs) >= 2 else None
     cis_combined = fisher_combine_p(sorted(set(cis_by_gse.values()))) if cis_by_gse else None
 
+    # ---- 贝叶斯证据通道（BAYESIAN_DESIGN.md 设计 A/D；先验见 bayes.py）----
+    re_stats = None
+    if usable_rs:
+        re_stats = bayes_mod.posterior_theta(usable_rs, usable_ns)
+    clean_observed = [d["r"] for d in ds if d["r"] is not None
+                      and not str(d.get("note") or "").startswith("design:")]
+    sign_p = bayes_mod.sign_consistency(clean_observed)
+    # 报告档（reporting aid，非判定门）：P(θ>0.5) 的连续谱
+    if re_stats is not None:
+        p = re_stats['P_theta']
+        bayes_band = 'high(P>=0.9)' if p >= 0.9 else ('mid(0.5-0.9)' if p >= 0.5 else 'low(<0.5)')
+    else:
+        bayes_band = ''
+
     flags, labels = [], []
     k = len(usable_rs)
     if k == 1:
@@ -184,6 +199,13 @@ def make_card(driver: str, gene: str, store_rows, ssot_row: Optional[dict] = Non
             "pooled_r": pooled_r, "r_ci95": [lo, hi], "I2_pct": i2,
             "r_spread": spread, "sign_flip": sign_flip,
             "cis_combined_p": cis_combined,
+            # 贝叶斯通道（设计 A/D）
+            "tau2": re_stats['tau2'] if re_stats else None,
+            "pooled_r_re": re_stats['pooled_r'] if re_stats else None,
+            "r_ci95_re": [re_stats['ci_lo'], re_stats['ci_hi']] if re_stats else None,
+            "P_theta": re_stats['P_theta'] if re_stats else None,
+            "sign_consistency_p": sign_p,
+            "bayes_band": bayes_band,
             "flags": flags, "labels": labels, "structure": structure}
 
 
@@ -215,6 +237,13 @@ def render_text(card: dict) -> str:
              f"[{_fmt(card['r_ci95'][0])}, {_fmt(card['r_ci95'][1])}]"
              f"   I² = {_fmt(card['I2_pct'], 0) if card['I2_pct'] is not None else '–'}%"
              f"   usable k = {card['n_usable']}")
+    if card.get('P_theta') is not None:
+        L.append(f"  bayes: RE r = {_fmt(card['pooled_r_re'])} "
+                 f"[{_fmt(card['r_ci95_re'][0])}, {_fmt(card['r_ci95_re'][1])}]"
+                 f"   τ² = {_fmt(card['tau2'], 2)}   P(θ>0.5) = {card['P_theta']:.3f}"
+                 f"   [{card['bayes_band']}]")
+    if card.get('sign_consistency_p') is not None:
+        L.append(f"  sign consistency P(多数同向) = {card['sign_consistency_p']:.3f}")
     if card["cis_combined_p"] is not None:
         L.append(f"  cis combined (Fisher) = {card['cis_combined_p']:.2e}")
     if card["structure"]:
@@ -234,7 +263,8 @@ def render_json(card: dict) -> str:
 
 CARD_TSV_FIELDS = ["gene", "driver", "ssot_status", "evidence_level", "n_usable",
                    "pooled_r", "r_ci_lo", "r_ci_hi", "I2_pct", "r_spread",
-                   "sign_flip", "cis_combined_p", "flags", "labels"]
+                   "sign_flip", "cis_combined_p", "tau2", "pooled_r_re",
+                   "P_theta", "sign_consistency_p", "bayes_band", "flags", "labels"]
 
 
 def render_tsv_row(card: dict) -> str:
@@ -246,5 +276,10 @@ def render_tsv_row(card: dict) -> str:
             _fmt(card["r_spread"], 2) if card["r_spread"] is not None else "",
             int(card["sign_flip"]),
             f"{card['cis_combined_p']:.2e}" if card["cis_combined_p"] is not None else "",
+            _fmt(card.get("tau2"), 2) if card.get("tau2") is not None else "",
+            _fmt(card.get("pooled_r_re")) if card.get("pooled_r_re") is not None else "",
+            f"{card['P_theta']:.3f}" if card.get("P_theta") is not None else "",
+            f"{card['sign_consistency_p']:.3f}" if card.get("sign_consistency_p") is not None else "",
+            card.get("bayes_band", ""),
             ";".join(card["flags"]), ";".join(card["labels"])]
     return "\t".join(str(v) for v in vals)

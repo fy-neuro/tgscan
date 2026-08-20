@@ -53,6 +53,12 @@ def analyze(df: pd.DataFrame, driver_row: pd.Series, candidate_row: pd.Series,
 
     pct = float((arr < r_val).mean() * 100)
     mean_r = float(arr.mean())
+    # z_abs: 绝对背景离均差（设计 C）——pct 是数据集相对量（同一 r 在干净
+    # 背景 99.8 分位、脏背景 62 分位），z_abs 提供跨数据集可比的绝对锚。
+    # 注：经验贝叶斯收缩在此省略——每数据集背景基因数 ~2 万，局部 μ 已精确，
+    # 收缩因子 n/(n+κ) 与 1 的差异 <1e-3（BAYESIAN_DESIGN.md §三）。
+    bg_sd = float(arr.std())
+    z_abs = float((r_val - mean_r) / bg_sd) if bg_sd > 0 else float('nan')
 
     if mean_r > 0.3:
         verdict = 'BACKGROUND_TOO_HIGH'
@@ -66,5 +72,5 @@ def analyze(df: pd.DataFrame, driver_row: pd.Series, candidate_row: pd.Series,
     return AnalysisResult(
         r=float(r_val), p_value=float(p_val), percentile=pct,
         mean_r=mean_r, n_samples=len(sample_cols), n_genes=len(arr),
-        status=verdict,
+        status=verdict, bg_sd=bg_sd, z_abs=z_abs,
     )
