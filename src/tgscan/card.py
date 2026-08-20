@@ -128,7 +128,9 @@ def make_card(driver: str, gene: str, store_rows, ssot_row: Optional[dict] = Non
             usable_rs.append(rv)
             usable_ns.append(int(n))
         cp = _f(r.get("cis_best_p"))
-        if cp is not None:
+        # cis 只从设计干净的行合并——设计死行的 cis p 同样是伪相关产物
+        # (Cerkl 案例 08-20: usable k=0 但 headline cis 1.28e-05 全来自 scRNA 行)
+        if cp is not None and not design_bad:
             cis_by_gse[r.get("gse")] = cp
         ds.append({"gse": r.get("gse"), "allele": r.get("allele"),
                    "n": int(n) if n is not None else None,

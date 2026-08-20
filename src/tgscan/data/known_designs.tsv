@@ -4,3 +4,5 @@ GSE115934	single_cell	BLOCKED	cells-as-samples (P1/P12/P100 hair cells); r refle
 GSE127845	trap_rna_ip	BLOCKED	CA1/cerebellum TRAP from Fmr1 KO mice; contains no Neurod1-cre transgene (allele-GSE pairing mismatch); TRAP IP not total RNA	ttyh3_cerkl_review.md 2026-08-20
 GSE146304	zscore	WEAK	z-score normalization suspicion; best cis 0.02 (Sp7-tTA BAC 15 candidates); ruled WEAK, not stored	night batch 08-20 PROJECT_STATE
 GSE139558	single_cell	BLOCKED	10x scRNA triple-file parsed OK but n=2 after pseudo-bulk; design dead	Task25 revival ledger 08-18
+GSE137572	single_cell	BLOCKED	10x cell-barcoded columns (AAACCTGAGGCTACGA-1 style), 1779 cells as samples, 93.6% zeros; Neurod1→Cerkl r=0.128/pct 99.2 is cell-type composition not transgene dosage (v0.3 audit 08-20)	design_audit 08-20 + manual matrix verification
+GSE182815	filter_too_strict	BLOCKED	14244 genes only; Vil1 cassette locus rows (Ctdsp1/Usp37) were the known P2 false-positive negative control anyway	design_audit 08-20
