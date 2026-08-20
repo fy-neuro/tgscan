@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.0 (2026-08-20)
+
+Focus: **Bayesian reporting channels** in the evidence card (designs A/C/D of
+`BAYESIAN_DESIGN.md`), developed on branch `bayes-v2` off the sealed v0.3.1
+baseline and merged after PI review. The calibrated scorer deliberately
+**keeps v1 bare features**: a 3-variant LOO comparison on the same 141-pair
+adjudication set gave v1 0.977 > v3 (posterior z) 0.912 > v2 (P_theta)
+0.882 — the design gate has already cleared the "high-r-but-fake" cases, so
+posterior transforms add no discriminative gain there. Bayesian channels and
+the gate are complementary, not replacements.
+
+### Added
+- **`tgscan/bayes.py`**: DerSimonian-Laird τ² + normal-conjugate posterior
+  (no MCMC needed at k=2-4). Card gains `tau2 / pooled_r_re / r_ci95_re /
+  P_theta / bayes_band` (design A) and `sign_consistency_p` — a Beta(2,8)
+  posterior turning the binary sign-flip flag into a continuous suspicion
+  score (design D; Cerkl/Ttc12 = 0.500 vs Ankk1 = 0.969 in the pilot).
+- **`bg_sd / z_abs` absolute background anchor** (design C, simplified):
+  full empirical-Bayes shrinkage was quantified (<1e-3 per-dataset effect at
+  ~20k background genes) and dropped; the honest simplification is noted in
+  code comments.
+- `BAYESIAN_DESIGN.md`: full design doc (math, adaptation, pilot table,
+  decision points for PI) + `bayesian_pilot.py` companion for recomputation.
+
+### Changed
+- **card**: cis combination now pools only design-clean rows; registry gains
+  GSE137572 (single-cell, BLOCKED) and GSE182815 (filter, BLOCKED).
+- **design**: paired plus/minus word-fraction detection (Venus_plus/
+  Venus_minus); single-arm genotype labels stay unblocked per the pairing rule.
+
+### Data
+- `known_hitchhikers.tsv`: 29 rows = 21 confirmed + 8 candidate — Cerkl
+  retracted to candidate (sole dataset GSE137572 is a 10x per-cell matrix);
+  Ttc12 added (L2c).
+
+### Tests
+- pytest 23 + selftest green; bayes unit tests use the pilot digits as gold
+  standard (digit-identical regression).
+
 ## 0.3.0 (2026-08-20)
 
 Focus: **design gate as Stage 0** + evidence transparency. Ground truth from
