@@ -45,11 +45,17 @@ BLOCKING_ISSUES = {
 
 # fluorescence markers used as sort reporters
 _FLUOR = r'(?:GFP|EGFP|YFP|RFP|tdTomato|mCherry|Venus|DsRed|Tomato|ZsGreen)'
-# "GFP+_1", "GFP-2", "EGFP pos", "GFP-negative" -> fraction markers.
-# '-'/'+' must attach to the marker (or pos/neg word) so that plain
-# line-number ids ("GFP line 1" style) are not misread as fractions.
-_POS_PAT = re.compile(rf'{_FLUOR}\s*(?:\+|pos(itive)?)\b|{_FLUOR}\s*\+\d', re.I)
-_NEG_PAT = re.compile(rf'{_FLUOR}\s*(?:-(?![a-z])|neg(ative)?)\b|{_FLUOR}\s*-\d', re.I)
+# Fraction markers: "GFP+_1" / "GFP-2" / "EGFP pos" / "GFP-negative" /
+# "Venus_plus_22" / "Venus_minus_1". The '-'/'+' attach to the marker
+# (optionally via space/underscore) so plain line ids don't misread.
+# Pair rule: facs_sorted fires only when BOTH a positive and a negative
+# fraction are present (GSE83356 structure). A SINGLE-arm "Venus_plus" may
+# just be genotyping (GSE211929: K_WT_Venus_plus, no minus arm, cis passed)
+# — single-arm labels do not create cross-fraction sign-flip structure and
+# are NOT blocked (flagged for metadata review instead).
+_SEP = r'[ _\-]*'
+_POS_PAT = re.compile(rf'{_FLUOR}{_SEP}(?:\+|pos(itive)?|plus)(?![a-z])', re.I)
+_NEG_PAT = re.compile(rf'{_FLUOR}{_SEP}(?:-(?![a-z])|neg(ative)?|minus)(?![a-z])', re.I)
 _FACS_PAT = re.compile(r'\b(?:facs|flow[- ]?sort|sorted)\b', re.I)
 # TRAP / ribosome IP vocabulary (not total RNA)
 _TRAP_PAT = re.compile(r'(?<![A-Za-z0-9])(TRAP|RiboTag|Ribo-?tag|L10a|IgG|IP|input)(?![A-Za-z0-9])', re.I)

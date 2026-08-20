@@ -161,6 +161,17 @@ def run_selftest(verbose: bool = True) -> bool:
 
         facs_i, _, _ = _issues(facs_m)
         check('facs_sorted' in facs_i, f"FACS +/- pair detected (got {facs_i})")
+
+        # paired plus/minus words are equally sorting; single-arm is NOT
+        pm_m = _design_gate_matrix(os.path.join(tmp, "pm.tsv"),
+                                   ["Venus_plus_22", "Venus_plus_24", "Venus_minus_1", "Venus_minus_2"])
+        pm_i, _, _ = _issues(pm_m)
+        check('facs_sorted' in pm_i, f"paired Venus_plus/minus detected (got {pm_i})")
+        single_m = _design_gate_matrix(os.path.join(tmp, "single.tsv"),
+                                       ["K_WT_Venus_plus_22", "K_WT_Venus_plus_24", "F_Ko16", "F_Ko29"])
+        single_i, _, _ = _issues(single_m)
+        check('facs_sorted' not in single_i,
+              f"single-arm Venus_plus (genotype-style label, GSE211929) NOT blocked (got {single_i})")
         trap_i, _, _ = _issues(trap_m)
         check('trap_rna_ip' in trap_i, f"TRAP/input design detected (got {trap_i})")
         sc_i, _, _ = _issues(sc_m)
