@@ -92,24 +92,17 @@ def test_n_lt4_not_pooled():
 
 def test_score_components():
     from tgscan import score as S
-    # v2 通道特征: P_theta / sign_consistency（设计 A/D 后验, 见 bayes.py）
+    # v1 裸特征（2026-08-20 三变体对照后保留; 见 score.py 头注与 BAYESIAN_DESIGN §七）
     c = {"pooled_r": 0.9, "cis_combined_p": 1e-4, "n_usable": 2,
-         "P_theta": 0.95, "sign_consistency_p": 0.9,
          "sign_flip": False, "I2_pct": 0.0, "datasets": [1], "structure": {"in_bac_pct": 100}}
     f = S.features_from_card(c)
-    assert abs(f[0] - 0.95) < 1e-9 and f[3] == 1.0 and abs(f[4] - 0.9) < 1e-9
-    c2 = dict(c, P_theta=0.2, sign_consistency_p=0.1, I2_pct=95)
+    assert abs(f[0] - 0.9) < 1e-9 and f[3] == 1.0
+    c2 = dict(c, sign_flip=True, I2_pct=95)
     f2 = S.features_from_card(c2)
-    assert abs(f2[0] - 0.2) < 1e-9 and abs(f2[4] - 0.1) < 1e-9 and f2[5] == 0.95
+    assert f2[4] == 1.0 and f2[5] == 0.95
     m = S.fit_logistic([f, f2], [1.0, 0.0])
     p_hi = S.apply_model(m, f); p_lo = S.apply_model(m, f2)
     assert p_hi > p_lo
-    # 无新键的旧式 card dict: P_theta 退回单数据集后验, sign 无观测→0.5 中性
-    c3 = {"pooled_r": 0.9, "cis_combined_p": 1e-4, "n_usable": 1,
-          "sign_flip": False, "I2_pct": None,
-          "datasets": [{"r": 0.9, "n": 20}], "structure": {"in_bac_pct": 100}}
-    f3 = S.features_from_card(c3)
-    assert 0.0 < f3[0] <= 1.0 and f3[4] == 0.5
 
 
 def test_bayes_channels():

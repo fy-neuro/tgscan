@@ -4,14 +4,21 @@
 权重系数全部公开, 校准于项目裁决集(SSOT vs store negatives),
 LOO-CV 报告, PI 定调前仅作排序参考。输出含组件分解, 逐项可审计。
 
-v2 特征(BAYESIAN_DESIGN.md 设计 B, 证据通道化; 全部来自 card, 无黑箱):
-  x1 = P(θ>0.5)  设计 A 后验——真相关>0.5 的概率(替代裸 pooled_r;
-       小 n 数据集自动贬值; 无可用行时退回最强单数据集后验)
+特征(v1, 裸统计量——2026-08-20 三变体对照后的诚实选择):
+  x1 = pooled_r(usable; 无则单源 r)
   x2 = min(-log10(cis_combined), 8)/8
   x3 = min(n_usable, 3)/3
   x4 = in_bac(1/0/0.5-unknown)
-  x5 = sign_consistency P(多数数据集同向)[设计 D; 无观测→0.5 中性]  [正向]
+  x5 = sign_flip(1/0)  [负向]
   x6 = min(I2,100)/100 [负向]
+
+对照实验(BAYESIAN_DESIGN.md §七, 同一裁决集 141 对):
+  v1 裸特征      LOO AUC 0.977   ← 保留
+  v2 P_theta     LOO AUC 0.882   (后验饱和: 0.99/0.998/1.0 挤压排序粒度)
+  v3 后验 z 值   LOO AUC 0.912   (不饱和但设计闸门清场后无增益)
+结论: 设计闸门已移除"高 r 但假"的案例, 裸 r 在干净负例集上判别力最强;
+贝叶斯通道(P_theta/τ²/signP)的价值在 card 报告层(连续谱/异质性/sign
+怀疑度), 不在本校准器。两者互补, 不是替代。
 """
 from __future__ import annotations
 
@@ -20,33 +27,23 @@ import math
 from typing import Optional
 
 from . import card as card_mod
-from . import bayes as bayes_mod
 
-FEATS = ["P_theta", "cis_strength", "n_usable_n", "in_bac", "sign_consistency", "i2_n"]
+FEATS = ["pooled_r", "cis_strength", "n_usable_n", "in_bac", "sign_flip", "i2_n"]
 
 
 def features_from_card(c: dict) -> Optional[list]:
     if c["pooled_r"] is None and not c["datasets"]:
         return None
-    # x1: 设计 A 后验 P(θ>0.5)
-    p_theta = c.get("P_theta")
-    if p_theta is None:
-        vals = [(d["r"], d["n"]) for d in c["datasets"]
-                if d["r"] is not None and d["n"]]
-        if vals:
-            best = max(vals, key=lambda t: abs(t[0]))
-            n_eff = max(4, best[1])
-            p_theta = bayes_mod.posterior_theta([best[0]], [n_eff])["P_theta"]
-        else:
-            p_theta = 0.0
+    r = c["pooled_r"]
+    if r is None:  # 无可用合并时取任一有效 r 的最大绝对值方向保守值
+        vals = [d["r"] for d in c["datasets"] if d["r"] is not None]
+        r = max(vals) if vals else 0.0
     cis = c["cis_combined_p"]
     cis_strength = min(-math.log10(max(cis, 1e-8)), 8) / 8 if cis else 0.0
     st = c.get("structure") or {}
     in_bac = 0.5 if st.get("in_bac_pct") is None else (1.0 if st["in_bac_pct"] > 0 else 0.0)
-    sign_p = c.get("sign_consistency_p")
-    sign_x = 0.5 if sign_p is None else sign_p
-    return [p_theta, cis_strength, min(c["n_usable"], 3) / 3, in_bac,
-            sign_x,
+    return [r, cis_strength, min(c["n_usable"], 3) / 3, in_bac,
+            1.0 if c["sign_flip"] else 0.0,
             min(c["I2_pct"] or 0, 100) / 100 if c["I2_pct"] is not None else 0.0]
 
 
