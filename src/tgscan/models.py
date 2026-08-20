@@ -14,6 +14,8 @@ class AnalysisResult:
     n_samples: int
     n_genes: int  # number of genes used in genome-wide distribution
     status: str  # HIGH_CONFIDENCE / MODERATE / NO_SIGNAL / BACKGROUND_TOO_HIGH
+    bg_sd: float = float('nan')   # background sd (design C)
+    z_abs: float = float('nan')   # absolute background z-score (design C)
 
     def to_dict(self) -> dict:
         return asdict(self)

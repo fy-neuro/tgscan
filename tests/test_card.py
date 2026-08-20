@@ -92,6 +92,7 @@ def test_n_lt4_not_pooled():
 
 def test_score_components():
     from tgscan import score as S
+    # v1 裸特征（2026-08-20 三变体对照后保留; 见 score.py 头注与 BAYESIAN_DESIGN §七）
     c = {"pooled_r": 0.9, "cis_combined_p": 1e-4, "n_usable": 2,
          "sign_flip": False, "I2_pct": 0.0, "datasets": [1], "structure": {"in_bac_pct": 100}}
     f = S.features_from_card(c)
@@ -102,3 +103,23 @@ def test_score_components():
     m = S.fit_logistic([f, f2], [1.0, 0.0])
     p_hi = S.apply_model(m, f); p_lo = S.apply_model(m, f2)
     assert p_hi > p_lo
+
+
+def test_bayes_channels():
+    """设计 A/D 的数学单元测试（BAYESIAN_DESIGN.md 试点数字为金标准）。"""
+    from tgscan import bayes as B
+    # DL τ²: 同质两数据集 → 0；试点 Ankk1 (0.873/n=5, 0.800/n=18) → P≈0.989
+    t2, z, se = B.dl_random_effects([0.873, 0.800], [5, 18])
+    assert t2 == 0.0
+    res = B.posterior_theta([0.873, 0.800], [5, 18])
+    assert abs(res['P_theta'] - 0.989) < 0.002, res['P_theta']
+    # 异质 → τ²>0 且后验区间变宽（Ctdsp1 型）
+    t2c, _, _ = B.dl_random_effects([0.99, 0.3, 0.1, 0.6], [6, 30, 30, 8])
+    assert t2c > 0.1
+    # 先验敏感性: 弱证据时先验影响可见, 强证据时消失
+    sens = B.prior_sensitivity([0.957], [18])
+    assert all(0.9 < p <= 1.0 for _, p in sens)
+    # sign 一致性: 全正 4 个 → 0.969（试点值）; 一半反向 → 0.5; <2 观测 → None
+    assert abs(B.sign_consistency([0.9, 0.8, 0.7, 0.6]) - 0.969) < 0.001
+    assert abs(B.sign_consistency([0.9, -0.3]) - 0.5) < 1e-6
+    assert B.sign_consistency([0.9]) is None

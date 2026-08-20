@@ -1,16 +1,24 @@
 """score.py — v0.3 provisional probability scorer (transparent logistic).
 
 设计声明（防"自创框架"）: 本模块是工程工具, 不是新判定教条——
-权重系数全部公开, 校准于项目裁决集(22+6 positives vs store negatives),
+权重系数全部公开, 校准于项目裁决集(SSOT vs store negatives),
 LOO-CV 报告, PI 定调前仅作排序参考。输出含组件分解, 逐项可审计。
 
-特征(全部来自 card, 无黑箱):
-  x1 = pooled_r(usable; 无则单源 r; 均无则 0)
+特征(v1, 裸统计量——2026-08-20 三变体对照后的诚实选择):
+  x1 = pooled_r(usable; 无则单源 r)
   x2 = min(-log10(cis_combined), 8)/8
   x3 = min(n_usable, 3)/3
   x4 = in_bac(1/0/0.5-unknown)
   x5 = sign_flip(1/0)  [负向]
   x6 = min(I2,100)/100 [负向]
+
+对照实验(BAYESIAN_DESIGN.md §七, 同一裁决集 141 对):
+  v1 裸特征      LOO AUC 0.977   ← 保留
+  v2 P_theta     LOO AUC 0.882   (后验饱和: 0.99/0.998/1.0 挤压排序粒度)
+  v3 后验 z 值   LOO AUC 0.912   (不饱和但设计闸门清场后无增益)
+结论: 设计闸门已移除"高 r 但假"的案例, 裸 r 在干净负例集上判别力最强;
+贝叶斯通道(P_theta/τ²/signP)的价值在 card 报告层(连续谱/异质性/sign
+怀疑度), 不在本校准器。两者互补, 不是替代。
 """
 from __future__ import annotations
 
@@ -112,6 +120,36 @@ def loo_report(X, y):
         m = fit_logistic([X[k] for k in tr], [y[k] for k in tr])
         out.append((y[i], apply_model(m, X[i])))
     return auc(out)
+
+
+def loo_predictions(X, y):
+    """LOO 的 (y_true, p_pred) 序列——校准曲线的输入。"""
+    out = []
+    for i in range(len(X)):
+        tr = [k for k in range(len(X)) if k != i]
+        m = fit_logistic([X[k] for k in tr], [y[k] for k in tr])
+        out.append((y[i], apply_model(m, X[i])))
+    return out
+
+
+def calibration_table(preds, n_bins: int = 5):
+    """可靠性表：[(bin_lo, bin_hi, n, mean_pred, observed_frac), ...]。
+
+    诚实口径：正例仅 ~29 个，bin 内样本小，observed_frac 噪声大——
+    论文中只作可靠性图参考，不作判定依据。
+    """
+    edges = [i / n_bins for i in range(n_bins + 1)]
+    tab = []
+    for i in range(n_bins):
+        grp = [(y, p) for y, p in preds if edges[i] <= p < edges[i + 1] or
+               (i == n_bins - 1 and p == 1.0)]
+        if not grp:
+            tab.append((edges[i], edges[i + 1], 0, None, None))
+            continue
+        ys = [g[0] for g in grp]
+        tab.append((edges[i], edges[i + 1], len(grp),
+                    sum(p for _, p in grp) / len(grp), sum(ys) / len(ys)))
+    return tab
 
 
 def score_pair(driver, gene, store_rows, ssot_row, model):
