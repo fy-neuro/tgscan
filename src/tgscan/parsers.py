@@ -102,18 +102,47 @@ def _merge_dup_value_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 def _parse_simple(path: str) -> pd.DataFrame:
     """csv/tsv/txt.gz with auto-detect separator + composite ID normalization."""
-    df = pd.read_csv(path, sep=None, engine='python', comment='#', on_bad_lines='skip')
+    # Prefer tab when the header carries tabs: composite-ID files like
+    # "id_gene,gene_name,gene_type<TAB>smp1<TAB>smp2..." make the separator
+    # sniffer pick ',' and collapse every sample column into one giant field
+    # (GSE94145 bug, 2026-08-20).
+    sep = None
+    opener = gzip.open if str(path).endswith('.gz') else open
+    try:
+        with opener(path, 'rt', errors='ignore') as fh:
+            line = ''
+            for _ in range(200):  # skip comment lines like the csv reader does
+                line = fh.readline()
+                if not line or not line.lstrip().startswith('#'):
+                    break
+            if line and line.count('\t') >= 2 and line.count('\t') >= line.count(','):
+                sep = '\t'
+    except Exception:
+        pass
+    df = pd.read_csv(path, sep=sep, engine='python', comment='#', on_bad_lines='skip')
     df = _merge_dup_value_cols(df)
     if len(df.columns) > 0:
         col = df.columns[0]
-        s = df[col].astype(str)
-        # pacbio composite: ENSMUST_X_ENSMUSG_Y → extract gene ID
-        if s.head(50).str.contains('ENSMUST.*ENSMUSG').any():
-            s = s.str.extract(r'(ENSMUSG\d+)', expand=False).fillna(s)
-        # strip version suffixes
-        s = s.str.replace(r'(ENSMUSG\d+)\.\d+', r'\1', regex=True)
-        s = s.str.replace(r'(ENSMUSG\d+)-\d+', r'\1', regex=True)
-        df[col] = s
+        s_full = df[col].astype(str)
+        # composite first column ("id_gene,gene_name,gene_type" style): expand
+        # into real columns so symbol lookup and sample detection both work
+        if ',' in str(col) and s_full.head(50).str.contains(',', regex=False).mean() > 0.8:
+            expanded = s_full.str.split(',', expand=True)
+            header_names = str(col).split(',')
+            names = header_names + [f'{header_names[-1]}_part{i}'
+                                    for i in range(len(header_names), expanded.shape[1])]
+            expanded.columns = names
+            expanded.index = df.index
+            df = pd.concat([expanded, df.drop(columns=[col])], axis=1)
+        else:
+            s = s_full
+            # pacbio composite: ENSMUST_X_ENSMUSG_Y → extract gene ID
+            if s.head(50).str.contains('ENSMUST.*ENSMUSG').any():
+                s = s.str.extract(r'(ENSMUSG\d+)', expand=False).fillna(s)
+            # strip version suffixes
+            s = s.str.replace(r'(ENSMUSG\d+)\.\d+', r'\1', regex=True)
+            s = s.str.replace(r'(ENSMUSG\d+)-\d+', r'\1', regex=True)
+            df[col] = s
     return df
 
 

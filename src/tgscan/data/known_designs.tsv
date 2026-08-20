@@ -1,0 +1,6 @@
+gse	design	verdict	evidence	source
+GSE83356	facs_sorted	BLOCKED	Lfng-BAC GFP FACS: GFP+ (Lfng 7-11e4 reads) vs GFP- (650-2800) sorting structure; cross-group r=-0.77 artefact, within-GFP+ r=+0.91 (local numeric check 08-20)	ttyh3_cerkl_review.md 2026-08-20
+GSE115934	single_cell	BLOCKED	cells-as-samples (P1/P12/P100 hair cells); r reflects cell-type composition, not co-regulation	ttyh3_cerkl_review.md 2026-08-20
+GSE127845	trap_rna_ip	BLOCKED	CA1/cerebellum TRAP from Fmr1 KO mice; contains no Neurod1-cre transgene (allele-GSE pairing mismatch); TRAP IP not total RNA	ttyh3_cerkl_review.md 2026-08-20
+GSE146304	zscore	WEAK	z-score normalization suspicion; best cis 0.02 (Sp7-tTA BAC 15 candidates); ruled WEAK, not stored	night batch 08-20 PROJECT_STATE
+GSE139558	single_cell	BLOCKED	10x scRNA triple-file parsed OK but n=2 after pseudo-bulk; design dead	Task25 revival ledger 08-18

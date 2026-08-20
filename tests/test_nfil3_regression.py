@@ -2,6 +2,12 @@
 import pytest
 from tgscan import verify
 
+# The bundled fixture matrix is small (~2k genes) by design; these tests
+# target the analysis pipeline, so the v0.3 design gate is disabled
+# (filter_too_strict would otherwise block — gate behaviour is covered in
+# selftest.py).
+N = {"gate": False}
+
 
 def test_nfil3_auh_confirmed(nfil3_matrix, mini_gtf):
     """Nfil3 → Auh: cis-enrichment should pass, verdict CONFIRMED."""
@@ -11,6 +17,7 @@ def test_nfil3_auh_confirmed(nfil3_matrix, mini_gtf):
         candidate='Auh',
         gtf_path=mini_gtf,
         run_cis=True,
+        **N,
     )
     assert result.error is None, f"Unexpected error: {result.error}"
     assert result.analysis is not None
@@ -31,6 +38,7 @@ def test_nfil3_gm33424(nfil3_matrix, mini_gtf):
         driver='Nfil3',
         candidate='Gm33424',
         gtf_path=mini_gtf,
+        **N,
     )
     assert result.error is None
     assert result.analysis is not None

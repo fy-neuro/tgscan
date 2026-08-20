@@ -8,7 +8,7 @@ from .parsers import parse_matrix, numeric_sample_cols
 from .analysis import analyze
 from .cis import cis_test
 from .gtf import GtfIndex, get_gtf_index
-from .design import detect_design_issues
+from .design import screen_design, detect_design_issues
 
 
 class TimeoutError(Exception):
@@ -22,7 +22,8 @@ def _timeout_handler(signum, frame):
 def verify(matrix_path: str, driver: str, candidate: str, gtf_path: str,
            driver_eid: Optional[str] = None, candidate_eid: Optional[str] = None,
            driver_entrez: Optional[str] = None, candidate_entrez: Optional[str] = None,
-           run_cis: bool = True, timeout_sec: int = 120) -> VerifyResult:
+           run_cis: bool = True, timeout_sec: int = 120,
+           gse: Optional[str] = None, gate: bool = True) -> VerifyResult:
     """Verify a single (driver, candidate) pair.
 
     Args:
@@ -34,6 +35,8 @@ def verify(matrix_path: str, driver: str, candidate: str, gtf_path: str,
         driver_entrez/candidate_entrez: optional Entrez IDs (for Entrez-format matrices)
         run_cis: whether to run Stage 2 cis-enrichment test (default True)
         timeout_sec: timeout in seconds for the full pipeline
+        gse: optional GSE accession (enables curated design-registry lookup)
+        gate: design gate on/off (v0.3 default on; off = legacy behaviour for tests)
 
     Returns:
         VerifyResult with analysis (stage 1) and cis (stage 2, if run).
@@ -50,7 +53,7 @@ def verify(matrix_path: str, driver: str, candidate: str, gtf_path: str,
     try:
         return _verify_inner(matrix_path, driver, candidate, gtf_path,
                              driver_eid, candidate_eid, driver_entrez, candidate_entrez,
-                             run_cis)
+                             run_cis, gse, gate)
     except TimeoutError as e:
         result = VerifyResult(gene=candidate, driver=driver, matrix_format='?',
                               error=f'timeout ({timeout_sec}s)')
@@ -65,7 +68,8 @@ def verify(matrix_path: str, driver: str, candidate: str, gtf_path: str,
 
 
 def _verify_inner(matrix_path, driver, candidate, gtf_path,
-                  driver_eid, candidate_eid, driver_entrez, candidate_entrez, run_cis):
+                  driver_eid, candidate_eid, driver_entrez, candidate_entrez,
+                  run_cis, gse, gate):
     gtf = get_gtf_index(gtf_path)
     # resolve Ensembl IDs
     if driver_eid is None:
@@ -80,6 +84,18 @@ def _verify_inner(matrix_path, driver, candidate, gtf_path,
     sample_cols = numeric_sample_cols(df, id_col)
     if len(sample_cols) < 3:
         raise ValueError(f"too few samples ({len(sample_cols)})")
+
+    # v0.3 design gate: FACS / single-cell / TRAP / z-score / registry
+    design = screen_design(df, sample_cols, gse) if gate else None
+    if design and design['verdict'] == 'BLOCK':
+        issues = list(design['issues'])
+        if design['registry']:
+            reg = design['registry']
+            issues.append(f"registry:{reg.get('design')}[{reg.get('verdict')}]")
+        return VerifyResult(gene=candidate, driver=driver, matrix_format=fmt,
+                            error='blocked_design: ' + '; '.join(issues),
+                            design_issues=issues,
+                            design_verdict='BLOCK')
 
     # find driver
     drv_row, _ = gtf.find_in_matrix(df, driver, driver_eid, driver_entrez)
@@ -104,7 +120,9 @@ def _verify_inner(matrix_path, driver, candidate, gtf_path,
             pass
 
     return VerifyResult(gene=candidate, driver=driver, matrix_format=fmt,
-                        analysis=analysis, cis=cis_res)
+                        analysis=analysis, cis=cis_res,
+                        design_issues=design['issues'] if design else [],
+                        design_verdict=design['verdict'] if design else None)
 
 
 def verify_batch(jobs_tsv: str, gtf_path: str, output_tsv: str,
@@ -193,6 +211,19 @@ def verify_batch(jobs_tsv: str, gtf_path: str, output_tsv: str,
         id_col = df.columns[0]
         sample_cols = numeric_sample_cols(df, id_col)
 
+        # v0.3 design gate: curated registry + matrix-intrinsic detection
+        design = screen_design(df, sample_cols, gse)
+        if design['verdict'] == 'BLOCK':
+            for job in gse_jobs:
+                r = _error_result(job, gse, 'blocked_design: ' + '; '.join(design['issues']))
+                r['status'] = 'blocked_design'
+                r['design_issues'] = '; '.join(design['issues'])
+                results.append(r)
+            print(f"  [design gate] BLOCKED {'; '.join(design['issues'])}", flush=True)
+            continue
+        design_note = '; '.join(design['issues']) + \
+            (f"|registry:{design['registry']['verdict']}" if design['registry'] else '')
+
         # group by driver
         by_driver: Dict[str, List[dict]] = {}
         for job in gse_jobs:
@@ -222,7 +253,7 @@ def verify_batch(jobs_tsv: str, gtf_path: str, output_tsv: str,
                     results.append(_error_result(job, gse, f'analyze: {e}'))
                     continue
                 results.append(_result_dict(job, gse, fmt, len(sample_cols),
-                                            analysis=an))
+                                            analysis=an, design_issues=design_note))
 
         # incremental save every 5 GSE
         if i % 5 == 0:
@@ -250,7 +281,7 @@ def _find_geo_file(geo_dir: str, gse: str) -> Optional[str]:
 
 
 def _result_dict(job, gse, fmt, n_samples, analysis: Optional[AnalysisResult] = None,
-                  status: Optional[str] = None) -> dict:
+                  status: Optional[str] = None, design_issues: str = '') -> dict:
     d = {
         'gse': gse,
         'allele': job.get('allele', ''),
@@ -260,6 +291,7 @@ def _result_dict(job, gse, fmt, n_samples, analysis: Optional[AnalysisResult] = 
         'format': fmt,
         'n_samples': n_samples,
         'status': status or (analysis.status if analysis else 'unknown'),
+        'design_issues': design_issues,
     }
     if analysis:
         d.update({
@@ -275,7 +307,7 @@ def _error_result(job, gse, error: str) -> dict:
         'gse': gse, 'allele': job.get('allele', ''),
         'driver': job['driver'], 'candidate': job['candidate'],
         'dist_kb': job.get('dist_kb', ''), 'format': '',
-        'n_samples': 0, 'status': 'error', 'error': error,
+        'n_samples': 0, 'status': 'error', 'error': error, 'design_issues': '',
     }
 
 

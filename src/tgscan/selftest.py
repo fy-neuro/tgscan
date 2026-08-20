@@ -7,7 +7,10 @@ runs the full verify() pipeline, and checks the expected outcome:
   - an unlinked negative-control gene must stay NO_SIGNAL;
   - background genes use numeric-leading MGI symbols (0610005C13Rik style),
     regression-guarding the symbol-detection bug that caused NO_VALID_R in the
-    web pipeline (2026-08-17).
+    web pipeline (2026-08-17);
+  - v0.3 design gate: FACS-fraction / TRAP / single-cell designs are BLOCKED
+    before correlation (ground truth: GSE83356/115934/127845); a clean bulk
+    design passes; the curated registry blocks GSE83356 by accession.
 """
 from __future__ import annotations
 import os
@@ -16,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from .runner import verify
+from .design import detect_design_issues, screen_design, lookup_registry
 
 RNG = np.random.default_rng(42)
 
@@ -68,6 +72,39 @@ def _make_matrix(path: str) -> str:
     return path
 
 
+def _design_gate_matrix(path: str, sample_names, n_bg: int = 20) -> str:
+    """Dense small matrix with caller-chosen sample names (design signal only).
+
+    n_bg default 20 keeps files tiny; pass n_bg >= 15000 to build a matrix
+    that also clears filter_too_strict (needed for pure registry tests).
+    """
+    n = len(sample_names)
+    rows = {"Tgdrv1": RNG.poisson(100, n).astype(float),
+            "Tghh1": RNG.poisson(40, n).astype(float)}
+    for i in range(n_bg):
+        rows[f"0610{i:05d}Rik"] = RNG.poisson(30, n).astype(float)
+    df = pd.DataFrame(rows, index=sample_names).T.reset_index()
+    df.columns = ["gene"] + list(sample_names)
+    df.to_csv(path, sep="\t", index=False)
+    return path
+
+
+def _single_cell_matrix(path: str) -> str:
+    """30 'cells' as samples, 90% zeros — cells-as-sample signature."""
+    n = 30
+    names = [f"cell_{i}" for i in range(n)]
+    rows = {}
+    for i in range(80):
+        v = RNG.poisson(0.08, n).astype(float)  # ~92% zeros
+        rows[f"061004{i:02d}Rik"] = v
+    rows["Tgdrv1"] = RNG.poisson(0.4, n).astype(float)
+    rows["Tghh1"] = RNG.poisson(0.4, n).astype(float)
+    df = pd.DataFrame(rows, index=names).T.reset_index()
+    df.columns = ["gene"] + names
+    df.to_csv(path, sep="\t", index=False)
+    return path
+
+
 NEG_GENE = "06100000Rik"  # numeric-leading MGI symbol (NO_VALID_R regression)
 
 
@@ -77,8 +114,11 @@ def run_selftest(verbose: bool = True) -> bool:
         gtf = _make_gtf(os.path.join(tmp, "mini.gtf"))
         matrix = _make_matrix(os.path.join(tmp, "mini_counts.tsv"))
 
-        hh = verify(matrix, "Tgdrv1", "Tghh1", gtf)
-        neg = verify(matrix, "Tgdrv1", NEG_GENE, gtf)
+        # legacy pipeline checks run with the design gate off: the synthetic
+        # matrix is deliberately tiny (filter_too_strict) — gate tests below
+        # use dedicated matrices.
+        hh = verify(matrix, "Tgdrv1", "Tghh1", gtf, gate=False)
+        neg = verify(matrix, "Tgdrv1", NEG_GENE, gtf, gate=False)
 
         ok = True
         def check(cond, label):
@@ -101,6 +141,51 @@ def run_selftest(verbose: bool = True) -> bool:
               f"negative control stays NO_SIGNAL/MODERATE (got {neg.analysis.status if neg.analysis else '?'})")
         check(neg.cis is None or neg.cis.verdict != "CONFIRMED",
               "negative control does not reach cis CONFIRMED")
+
+        # ---- v0.3 design gate (positive/negative controls) ----
+        facs_m = _design_gate_matrix(os.path.join(tmp, "facs.tsv"),
+                                     ["GFP+1", "GFP+2", "GFP-1", "GFP-2", "unsorted_1", "unsorted_2"])
+        trap_m = _design_gate_matrix(os.path.join(tmp, "trap.tsv"),
+                                     ["CA1_TRAP_1", "CA1_TRAP_2", "CA1_input_1", "CA1_input_2"])
+        clean_m = _design_gate_matrix(os.path.join(tmp, "clean.tsv"),
+                                      ["AI7685", "AI7686", "AI7687", "AI7688", "AI7689", "AI7690"],
+                                      n_bg=15000)
+        sc_m = _single_cell_matrix(os.path.join(tmp, "sc.tsv"))
+
+        from .parsers import parse_matrix, numeric_sample_cols
+
+        def _issues(path):
+            df, _ = parse_matrix(path)
+            sc = numeric_sample_cols(df, df.columns[0])
+            return detect_design_issues(df, sc), df, sc
+
+        facs_i, _, _ = _issues(facs_m)
+        check('facs_sorted' in facs_i, f"FACS +/- pair detected (got {facs_i})")
+        trap_i, _, _ = _issues(trap_m)
+        check('trap_rna_ip' in trap_i, f"TRAP/input design detected (got {trap_i})")
+        sc_i, _, _ = _issues(sc_m)
+        check('single_cell_matrix' in sc_i, f"sparse cells-as-samples detected (got {sc_i})")
+        clean_i, _, _ = _issues(clean_m)
+        check(not any(k in ' '.join(clean_i) for k in ('facs', 'trap', 'single_cell')),
+              f"clean bulk design passes design detectors (got {clean_i})")
+
+        blocked = verify(facs_m, "Tgdrv1", "Tghh1", gtf)
+        check(blocked.design_verdict == 'BLOCK' and 'facs_sorted' in blocked.design_issues
+              and blocked.verdict == "BLOCKED_DESIGN",
+              f"verify() blocks FACS design end-to-end (got {blocked.design_verdict}: {blocked.design_issues})")
+
+        df_clean, _ = parse_matrix(clean_m)
+        sc_clean = numeric_sample_cols(df_clean, df_clean.columns[0])
+        clean_issues = detect_design_issues(df_clean, sc_clean)
+        check(clean_issues == [],
+              f"clean 15k-gene bulk matrix has zero design issues (got {clean_issues})")
+        reg_ok = screen_design(df_clean, sc_clean, gse="GSE83356")
+        check(reg_ok['verdict'] == 'BLOCK' and reg_ok['source'] == 'registry',
+              "registry alone blocks GSE83356 on an otherwise clean matrix")
+        check(lookup_registry("GSE94145") is None,
+              "unaudited GSE has no registry opinion")
+        check(lookup_registry("GSE146304")['verdict'].upper() == 'WEAK',
+              "registry carries WEAK verdicts")
         if verbose:
             print(f"\n  SELFTEST {'PASSED' if ok else 'FAILED'}")
         return ok

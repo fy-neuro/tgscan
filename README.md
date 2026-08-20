@@ -11,8 +11,8 @@ When a BAC transgene construct is built, it sometimes captures neighboring gene 
 
 `tgscan` provides:
 - **9 GEO matrix format parsers** (xlsx, csv.gz, tsv.gz, txt.gz, xls.gz, RAW.tar simple/Kallisto/Cufflinks, h5ad pseudo-bulk)
-- **Two-stage validation**: Stage 1 Pearson + genome-wide percentile (with background-dirty guard), Stage 2 cis-1Mb hypergeometric enrichment (the confirmation gold standard, p<1e-3)
-- **Design guards**: miRNA-only / over-filtered / z-score matrices flagged automatically
+- **Three-stage validation (v0.3)**: Stage 0 design gate (FACS-sorted / single-cell / TRAP-IP / z-score / miRNA-only / over-filtered matrices blocked, curated per-GSE design registry), Stage 1 Pearson + genome-wide percentile (with background-dirty guard), Stage 2 cis-1Mb hypergeometric enrichment (the confirmation gold standard, p<1e-3)
+- **Design gate**: miRNA-only / over-filtered / z-score matrices flagged automatically; v0.3 adds FACS-fraction (GFP+/GFP-), single-cell (cells-as-samples) and TRAP/RiboTag detection + `data/known_designs.tsv` registry (ground truth: GSE83356/GSE115934/GSE127845)
 - **Construct gate**: empirically excluded alleles (promoter cassettes that cannot capture neighbors, e.g. Vil1-cre 12.4kb) are auto-skipped in batch runs
 - **Bundled catalog**: 21 confirmed + 6 candidate hitchhikers (2026-08-17) with evidence levels
 - **CLI + Python API** for single/batch verification
@@ -37,6 +37,17 @@ pip install ".[h5ad]"        # + scanpy for h5ad pseudo-bulk
 ```bash
 tgscan selftest
 ```
+
+**Evidence card (v0.3 module)** — transparent per-gene dossier instead of a one-word verdict:
+
+```bash
+tgscan card -d Lfng -c Ttyh3 -s evidence_store.tsv --ssot known_hitchhikers.tsv
+# shows every dataset (r/n/pct/background/status), pooled r + CI + I²,
+# Fisher-combined cis p, structural capture, and automatic flags
+# (single-dataset / small-n / r-spread / sign-flip / capture-unverified / lineage-gap)
+# labels: replicated | needs-review | L1-channel. Formats: --format text|tsv|json
+```
+Build the store with `Task/Task25_validation_queue/build_evidence_store.py`.
 
 Runs the full pipeline (parser → stage 1 → cis) on a bundled synthetic
 locus — a co-amplified hitchhiker and a negative control. No downloads needed.

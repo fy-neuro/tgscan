@@ -47,10 +47,14 @@ class VerifyResult:
     analysis: Optional[AnalysisResult] = None
     cis: Optional[CisResult] = None
     error: Optional[str] = None
+    design_issues: List[str] = field(default_factory=list)
+    design_verdict: Optional[str] = None  # BLOCK / WEAK / PASS (design gate)
 
     @property
     def verdict(self) -> str:
-        """Final verdict — prefers cis over stage1."""
+        """Final verdict — design gate, then cis, then stage1."""
+        if self.design_verdict == 'BLOCK':
+            return "BLOCKED_DESIGN"
         if self.cis is not None:
             return self.cis.verdict
         if self.analysis is not None:
@@ -74,6 +78,8 @@ class VerifyResult:
             'gene': self.gene, 'driver': self.driver,
             'matrix_format': self.matrix_format,
             'verdict': self.verdict, 'error': self.error,
+            'design_verdict': self.design_verdict,
+            'design_issues': self.design_issues,
         }
         if self.analysis:
             for k, v in self.analysis.to_dict().items():
