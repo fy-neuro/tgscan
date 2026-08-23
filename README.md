@@ -11,7 +11,7 @@ When a BAC transgene construct is built, it sometimes captures neighboring gene 
 
 `tgscan` provides:
 - **9 GEO matrix format parsers** (xlsx, csv.gz, tsv.gz, txt.gz, xls.gz, RAW.tar simple/Kallisto/Cufflinks, h5ad pseudo-bulk)
-- **Unified Stage 1–9 pipeline** (PREDICT 1–3 / VERIFY 4–6 / ADJUDICATE 7–9): Stage 4 design gate (FACS-sorted / single-cell / TRAP-IP / z-score / miRNA-only / over-filtered matrices blocked, curated per-GSE design registry; historically "Stage 0"), Stage 5 Pearson + genome-wide percentile (with background-dirty guard), Stage 6 cis-1Mb hypergeometric enrichment (the confirmation gold standard, p<1e-3)
+- **Per-phase Stage 0–2 pipeline** (PREDICT·0-2 / VERIFY·0-2 / ADJUDICATE·0-2; catalog = terminal artifact): VERIFY Stage 0 design gate (FACS-sorted / single-cell / TRAP-IP / z-score / miRNA-only / over-filtered matrices blocked, curated per-GSE design registry), Stage 1 Pearson + genome-wide percentile (with background-dirty guard), Stage 2 cis-1Mb hypergeometric enrichment (the confirmation gold standard, p<1e-3)
 - **Design gate**: miRNA-only / over-filtered / z-score matrices flagged automatically; v0.3 adds FACS-fraction (GFP+/GFP-), single-cell (cells-as-samples) and TRAP/RiboTag detection + `data/known_designs.tsv` registry (ground truth: GSE83356/GSE115934/GSE127845)
 - **Construct gate**: empirically excluded alleles (promoter cassettes that cannot capture neighbors, e.g. Vil1-cre 12.4kb) are auto-skipped in batch runs
 - **Bundled catalog**: 21 confirmed + 8 candidate hitchhikers (2026-08-20) with evidence levels
