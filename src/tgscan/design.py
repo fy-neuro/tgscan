@@ -57,9 +57,13 @@ _SEP = r'[ _\-]*'
 _POS_PAT = re.compile(rf'{_FLUOR}{_SEP}(?:\+|pos(itive)?|plus)(?![a-z])', re.I)
 _NEG_PAT = re.compile(rf'{_FLUOR}{_SEP}(?:-(?![a-z])|neg(ative)?|minus)(?![a-z])', re.I)
 _FACS_PAT = re.compile(r'\b(?:facs|flow[- ]?sort|sorted)\b', re.I)
+# Sort-fraction bin naming: "E18/383_SF10-1", "P5/393_SF17-16" — numbered bins
+# of a fluorescence sort (GSE90860, Zbtb16 case 08-24). Require >=3 distinct
+# bins so a stray SF token cannot fire the gate.
 # TRAP / ribosome IP vocabulary (not total RNA)
 _TRAP_PAT = re.compile(r'(?<![A-Za-z0-9])(TRAP|RiboTag|Ribo-?tag|L10a|IgG|IP|input)(?![A-Za-z0-9])', re.I)
 _SC_PAT = re.compile(r'(?:^|[^a-z])(?:scRNA|single[- ]?cell|10x)(?:$|[^a-z])', re.I)
+_SFBIN_PAT = re.compile(r'(?:^|[/_ \-])(SF\d+)(?:[-_ ]\d+)?(?=$|[/_ \-|])', re.I)
 
 
 def _detect_facs(sample_cols) -> bool:
@@ -70,6 +74,10 @@ def _detect_facs(sample_cols) -> bool:
     has_neg = any(_NEG_PAT.search(n) for n in names)
     if has_pos and has_neg:
         return True
+    if _SFBIN_PAT.search(joined):
+        bins = set(_SFBIN_PAT.findall(joined))
+        if len(bins) >= 3:
+            return True
     return bool(_FACS_PAT.search(joined))
 
 

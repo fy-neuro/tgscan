@@ -145,6 +145,23 @@ def cis_test(df: pd.DataFrame, driver_eid: str, sample_cols, gtf: GtfIndex,
     else:
         verdict = 'WEAK_OR_FALSE_POSITIVE'
 
+    # B-side (08-24): exclude the driver's self row (r=1.0, rank 1, dist 0 —
+    # a guaranteed cis slot any gene would get) and re-rank. Disclosed alongside
+    # the A-side per PI 2026-08-24 option-2 ruling; verdict thresholds unchanged.
+    rdf_b = rdf[rdf['eid'] != driver_eid].reset_index(drop=True)
+    rdf_b['rank'] = rdf_b.index + 1
+    near_b = rdf_b[(rdf_b['chrom'] == drv_loc.chrom) & (rdf_b['dist_kb'].abs() <= cis_window_kb)]
+    n_b, k_b = len(rdf_b), len(near_b)
+    best_p_b = 1.0
+    if n_b > 0:
+        for k in top_k:
+            n_cis_b = int(((rdf_b['rank'] <= k) & (rdf_b['chrom'] == drv_loc.chrom) &
+                           (rdf_b['dist_kb'].abs() <= cis_window_kb)).sum())
+            p_b = float(1 - hypergeom.cdf(n_cis_b - 1, n_b, k_b, k)) if n_cis_b > 0 else 1.0
+            best_p_b = min(best_p_b, p_b)
+    verdict_b = ('CONFIRMED' if best_p_b < 1e-3 else
+                 'CANDIDATE' if best_p_b < 1e-2 else 'WEAK_OR_FALSE_POSITIVE')
+
     # top cis genes (limit 5)
     top_cis = near.sort_values('r', ascending=False).head(5)['sym'].astype(str).tolist()
 
@@ -160,4 +177,6 @@ def cis_test(df: pd.DataFrame, driver_eid: str, sample_cols, gtf: GtfIndex,
         fold_top10=cis_results.get(10, {}).get('fold', 0.0),
         fold_top50=cis_results.get(50, {}).get('fold', 0.0),
         fold_top100=cis_results.get(100, {}).get('fold', 0.0),
+        best_p_excl_driver=best_p_b,
+        verdict_excl_driver=verdict_b,
     )

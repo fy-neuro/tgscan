@@ -35,6 +35,10 @@ class CisResult:
     fold_top10: float = 0.0
     fold_top50: float = 0.0
     fold_top100: float = 0.0
+    # B-side convention (08-24, PI option 2 disclosure): driver self-correlation
+    # (r=1.0, rank 1) excluded from ranking — guards the guaranteed cis slot.
+    best_p_excl_driver: float = float('nan')
+    verdict_excl_driver: str = ''
 
     def to_dict(self) -> dict:
         return asdict(self)

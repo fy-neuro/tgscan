@@ -6,3 +6,4 @@ GSE146304	zscore	WEAK	z-score normalization suspicion; best cis 0.02 (Sp7-tTA BA
 GSE139558	single_cell	BLOCKED	10x scRNA triple-file parsed OK but n=2 after pseudo-bulk; design dead	Task25 revival ledger 08-18
 GSE137572	single_cell	BLOCKED	10x cell-barcoded columns (AAACCTGAGGCTACGA-1 style), 1779 cells as samples, 93.6% zeros; Neurod1→Cerkl r=0.128/pct 99.2 is cell-type composition not transgene dosage (v0.3 audit 08-20)	design_audit 08-20 + manual matrix verification
 GSE182815	filter_too_strict	BLOCKED	14244 genes only; Vil1 cassette locus rows (Ctdsp1/Usp37) were the known P2 false-positive negative control anyway	design_audit 08-20
+GSE90860	facs_sort_fraction	BLOCKED	E18/P2/P5 x SF1-SF18 fluorescence sort-fraction bins (n=223, Htr3a-EGFP DH30); bin-to-bin variation is cell-type composition not transgene dose — Htr3a->Zbtb16 pct 99.5 group-driven, within-Six2pos-equivalent analysis fails pct line	zbtb16_recheck_report.md 2026-08-24
