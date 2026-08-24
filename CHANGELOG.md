@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.1 (2026-08-24)
+
+Two audit-driven hardening patches, both born from the 08-24 recheck batch:
+
+- **Sort-fraction gate pattern.** `SF#`-numbered sample bins (e.g. `E18/383_SF10-1`)
+  are now detected as a FACS sorted-fraction design when >=3 distinct bins are
+  present — GSE90860 (Htr3a-EGFP, n=223) slipped past the keyword gate because
+  its bins use the `SF` abbreviation; the Htr3a->Zbtb16 signal there was
+  group-contrast driven, and both Zbtb16/Usp28 were withdrawn. GSE90860 added
+  to the curated design registry. Positive/negative controls verified (single
+  -arm `Venus_plus` labels still pass, clean bulk passes, 2 stray SF tokens
+  do not fire).
+- **cis dual-convention disclosure.** `CisResult` additionally reports
+  `best_p_excl_driver` / `verdict_excl_driver` — the ranking recomputed with
+  the driver's self-correlation (r=1.0, rank 1, a guaranteed cis slot any gene
+  would get) excluded. Roster numbers keep the original convention (PI ruling
+  2026-08-24, option 2, revisitable); the B-side is disclosed alongside so the
+  convention question stays transparent and a later switch needs no recompute.
+
+Data: SSOT 41 rows = 33 confirmed + 8 candidate (Six3 in, Mhrt restored,
+Zbtb16/Usp28 out; Neurog1/Six2 clone backfills).
+
 ## 0.4.0 (2026-08-20)
 
 Focus: **Bayesian reporting channels** in the evidence card (designs A/C/D of
