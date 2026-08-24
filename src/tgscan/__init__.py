@@ -12,7 +12,7 @@ from .runner import verify, verify_batch
 from .design import detect_design_issues, screen_design, lookup_registry
 from . import catalog
 
-__version__ = "0.3.0"
+__version__ = "0.4.1"
 
 __all__ = [
     'verify', 'verify_batch', 'parse_matrix', 'numeric_sample_cols', 'detect_format',
